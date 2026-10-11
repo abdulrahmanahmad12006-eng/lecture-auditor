@@ -60,73 +60,247 @@ async def read_root():
     from fastapi.responses import FileResponse
     return FileResponse(os.path.join(static_dir, "index.html"))
 
-# API Endpoints
+@app.get("/api/health")
+async def health_check():
+    """Return system health status."""
+    # Check database reachable
+    db_ok = False
+    chunk_count = 0
+    document_count = 0
+    try:
+        conn = retriever_instance.conn
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM chunks")
+        chunk_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT filename) FROM chunks")
+        document_count = cursor.fetchone()[0]
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    # Check LLM endpoint reachable
+    llm_ok = False
+    try:
+        # We'll do a simple request to the LLM endpoint with a minimal payload
+        import requests
+        resp = requests.post(
+            f"{config.LLM_BASE_URL}/chat/completions",
+            json={
+                "model": config.LLM_MODEL,
+                "messages": [{"role": "user", "content": "test"}],
+                "max_tokens": 1
+            },
+            timeout=5.0
+        )
+        if resp.status_code < 500:
+            llm_ok = True
+    except Exception:
+        llm_ok = False
+
+    return JSONResponse(content={
+        "database": {
+            "reachable": db_ok,
+            "chunk_count": chunk_count,
+            "document_count": document_count
+        },
+        "llm_endpoint": {
+            "reachable": llm_ok,
+            "url": config.LLM_BASE_URL
+        }
+    })
+
+# Helper function to sanitize filename
+def _sanitize_filename(filename: str) -> str:
+    """Remove path components and keep only safe characters."""
+    # Remove any path components
+    filename = os.path.basename(filename)
+    # Keep only alphanumeric, dot, hyphen, underscore
+    safe_chars = []
+    for c in filename:
+        if c.isalnum() or c in '.-_':
+            safe_chars.append(c)
+    filename = ''.join(safe_chars)
+    # Ensure it ends with .pdf
+    if not filename.lower().endswith('.pdf'):
+        filename = filename + '.pdf'
+    # Avoid empty filename
+    if not filename or filename == '.pdf':
+        filename = 'uploaded.pdf'
+    return filename
 
 @app.post("/api/upload")
 async def upload_files(files: List[UploadFile] = File(...)):
     """
-    Upload PDF files, save them to data/, run ingestion, and update indexes.
-    Returns the number of files processed and total chunks added.
+    Upload PDF files, save them to data/, run ingestion, and update indexes incrementally.
+    Returns per-file success/error and overall statistics.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
 
-    saved_paths = []
-    try:
-        for file in files:
-            # Validate file type (optional)
+    results = []
+    total_chunks_before = _get_total_chunks()
+    total_chunks_added = 0
+
+    for file in files:
+        file_result = {
+            "filename": file.filename,
+            "success": False,
+            "error": None,
+            "chunks_added": 0
+        }
+        try:
+            # Validate file type
             if not file.filename.lower().endswith('.pdf'):
-                raise HTTPException(status_code=400, detail=f"File {file.filename} is not a PDF")
+                raise ValueError("File is not a PDF")
+
+            # Sanitize filename
+            safe_filename = _sanitize_filename(file.filename)
 
             # Save the file
-            file_path = os.path.join(DATA_DIR, file.filename)
-            # Avoid overwriting by adding a timestamp if needed? For simplicity, we'll overwrite.
+            file_path = os.path.join(DATA_DIR, safe_filename)
+            # Avoid overwriting by adding a timestamp if needed? We'll replace existing file.
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
-            saved_paths.append(file_path)
 
-        # Ingest each file
-        total_chunks_before = _get_total_chunks()
-        for path in saved_paths:
-            ingest_pdf(path)
+            # Delete existing chunks for this filename to avoid duplicates
+            deleted_count = retriever_instance.delete_chunks_by_filename(safe_filename)
+            if deleted_count > 0:
+                # Rebuild indexes after deletion to keep FAISS index consistent
+                # We'll rebuild after ingestion as well, but we can do it now to keep index clean.
+                pass  # We'll rebuild after ingestion
 
-        # Rebuild retriever indexes to include new chunks
-        retriever_instance.build_indexes_from_db()
+            # Ingest the file (this inserts chunks into the database)
+            ingest_pdf(file_path)
 
-        total_chunks_after = _get_total_chunks()
-        chunks_added = total_chunks_after - total_chunks_before
+            # Get the newly added chunks for this filename to add to indexes incrementally
+            new_chunks = retriever_instance.get_chunks_by_filename(safe_filename)
+            if new_chunks:
+                # Convert to the format expected by add_chunks: (filename, page_number, section_title, chunk_id, text)
+                chunks_to_add = [
+                    (
+                        chunk['filename'],
+                        chunk['page_number'],
+                        chunk['section_title'],
+                        chunk['chunk_id'],
+                        chunk['text']
+                    )
+                    for chunk in new_chunks
+                ]
+                retriever_instance.add_chunks(chunks_to_add)
+                file_result["chunks_added"] = len(chunks_to_add)
+                total_chunks_added += len(chunks_to_add)
+            else:
+                # No chunks were extracted
+                pass
 
-        return JSONResponse(content={
-            "message": f"Successfully processed {len(files)} file(s)",
-            "files_processed": [os.path.join("data", f.filename) for f in files],
-            "chunks_added": chunks_added,
-            "total_chunks": total_chunks_after
-        })
-    except Exception as e:
-        # Clean up saved files on error? We'll leave them for now.
-        raise HTTPException(status_code=500, detail=f"Error processing files: {str(e)}")
-    finally:
-        # Close uploaded file handles
-        for file in files:
+            file_result["success"] = True
+        except Exception as e:
+            file_result["error"] = str(e)
+        finally:
+            # Close the file handle
             file.file.close()
+        results.append(file_result)
+
+    total_chunks_after = _get_total_chunks()
+
+    return JSONResponse(content={
+        "message": f"Processed {len(files)} file(s)",
+        "files": results,
+        "total_chunks_before": total_chunks_before,
+        "total_chunks_added": total_chunks_added,
+        "total_chunks_after": total_chunks_after
+    })
 
 @app.post("/api/query")
 async def query_question(payload: dict):
     """
-    Accept a question and return a grounded answer with citations.
+    Accept a question and return a grounded answer with citations and source metadata.
     Expected payload: {"question": "string"}
     """
     question = payload.get("question", "").strip()
     if not question:
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
+    # Check if there are any chunks in the database
+    total_chunks = _get_total_chunks()
+    if total_chunks == 0:
+        return JSONResponse(content={
+            "answer": "No documents have been indexed yet. Please upload some PDF documents first.",
+            "citations": [],
+            "sources": [],
+            "error": "No documents indexed"
+        })
+
     try:
-        # Use the generator to produce an answer
-        answer = generate_answer(question)
-        # The generator returns a Pydantic model; convert to dict for JSON response
-        return JSONResponse(content=answer.dict())
+        # Get search results
+        search_results = hybrid_search(question, limit=5)
+        if not search_results:
+            return JSONResponse(content={
+                "answer": "I cannot answer based on the provided sources.",
+                "citations": [],
+                "sources": [],
+                "info": "No relevant content found for the question."
+            })
+
+        # Build context and call generator
+        # We'll reuse the generator's internal steps to avoid duplication, but we can also call generate_answer.
+        # However, we need the search results to build the sources list.
+        # We'll call the generator's internal methods to get the answer and also keep the search results.
+        from lecture_auditor.generator import AnswerGenerator
+        generator = AnswerGenerator()
+        context = generator._format_context(search_results)
+        prompt = generator._build_prompt(question, context)
+        llm_output = generator._call_llm(prompt)
+        answer_obj = generator.GeneratedAnswer.validate_json(llm_output)
+        generator.close()
+
+        # Build sources list from search results and answer_obj.citations
+        # answer_obj.citations is a list of source numbers (1-based) indicating which search results were cited.
+        sources = []
+        for idx in answer_obj.citations:
+            # idx is 1-based
+            if 1 <= idx <= len(search_results):
+                result = search_results[idx-1]
+                sources.append({
+                    "filename": result.get('filename'),
+                    "page_number": result.get('page_number'),
+                    "section_title": result.get('section_title'),
+                    "text_snippet": result.get('text', '')[:200]  # snippet of first 200 chars
+                })
+
+        return JSONResponse(content={
+            "answer": answer_obj.answer,
+            "citations": answer_obj.citations,
+            "sources": sources
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating answer: {str(e)}")
+
+@app.delete("/api/documents/{filename}")
+async def delete_document(filename: str):
+    """
+    Delete a document and its chunks from the system.
+    """
+    # Sanitize the filename for safety
+    safe_filename = _sanitize_filename(filename)
+    # Delete chunks from database and indexes
+    deleted_count = retriever_instance.delete_chunks_by_filename(safe_filename)
+    if deleted_count == 0:
+        raise HTTPException(status_code=404, detail=f"No document found with filename '{safe_filename}'")
+
+    # Optionally, delete the actual file from the data directory
+    file_path = os.path.join(DATA_DIR, safe_filename)
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception:
+            # Ignore errors in file deletion
+            pass
+
+    return JSONResponse(content={
+        "message": f"Document '{safe_filename}' deleted successfully.",
+        "deleted_chunks": deleted_count
+    })
 
 @app.get("/api/documents")
 async def get_documents():

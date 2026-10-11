@@ -105,6 +105,111 @@ class HybridRetriever:
             self.faiss_index.add(embedding.astype('float32'))
             self.id_map.append(row_id)
 
+    def add_chunks(self, chunks: List[Tuple[str, int, str, str, str]]) -> None:
+        """
+        Add multiple chunks to the database and update indexes incrementally.
+        chunks: list of tuples (filename, page_number, section_title, chunk_id, text)
+        """
+        if not chunks:
+            return
+        cursor = self.conn.cursor()
+        # Insert all chunks into the database
+        cursor.executemany("""
+            INSERT INTO chunks (filename, page_number, section_title, chunk_id, text)
+            VALUES (?, ?, ?, ?, ?)
+        """, chunks)
+        self.conn.commit()
+        # Get the inserted row ids (assuming they are inserted in the same order as chunks)
+        # We need to retrieve the ids for the inserted rows. Since we don't have a way to get them directly,
+        # we can query for the rows we just inserted by matching the chunk_id values we know.
+        # However, chunk_id may not be unique if we don't enforce uniqueness. We'll assume chunk_id is unique.
+        # We'll fetch the ids for the given chunk_ids.
+        chunk_ids = [c[3] for c in chunks]  # chunk_id is the 4th element (0-indexed)
+        # Build a query to get ids for these chunk_ids
+        if chunk_ids:
+            placeholders = ','.join(['?'] * len(chunk_ids))
+            cursor.execute(f"""
+                SELECT id, chunk_id FROM chunks WHERE chunk_id IN ({placeholders})
+            """, chunk_ids)
+            rows = cursor.fetchall()
+            # Map chunk_id to id
+            id_map = {row['chunk_id']: row['id'] for row in rows}
+            # Now add each chunk to indexes
+            for filename, page_num, section_title, chunk_id, text in chunks:
+                row_id = id_map.get(chunk_id)
+                if row_id is not None:
+                    self.add_chunk_to_indexes(row_id, text)
+                else:
+                    # This should not happen if chunk_id is unique and we just inserted them
+                    pass
+        cursor.close()
+
+    def delete_chunks_by_filename(self, filename: str) -> int:
+        """
+        Delete all chunks with the given filename from the database and indexes.
+        Returns the number of chunks deleted.
+        """
+        cursor = self.conn.cursor()
+        # First, get the ids of chunks to delete
+        cursor.execute("SELECT id FROM chunks WHERE filename = ?", (filename,))
+        ids_to_delete = [row[0] for row in cursor.fetchall()]
+        if not ids_to_delete:
+            cursor.close()
+            return 0
+        # Delete from chunks table
+        cursor.execute("DELETE FROM chunks WHERE filename = ?", (filename,))
+        # Delete from FTS table
+        cursor.execute(f"DELETE FROM {self.fts_table} WHERE rowid IN ({','.join(['?']*len(ids_to_delete))})", ids_to_delete)
+        # For FAISS, we cannot easily delete specific vectors; we will rebuild the index from remaining chunks
+        # However, if DEPS_AVAILABLE is False, we skip FAISS handling.
+        if DEPS_AVAILABLE:
+            # We'll rebuild the FAISS index from the remaining chunks
+            # First, get all remaining chunks
+            cursor.execute("SELECT id, text FROM chunks ORDER BY id")
+            remaining_rows = cursor.fetchall()
+            if remaining_rows:
+                # Rebuild FAISS index
+                texts = [row['text'] for row in remaining_rows]
+                row_ids = [row['id'] for row in remaining_rows]
+                embeddings = self.model.encode(texts, normalize_embeddings=True) if self.model is not None else None
+                if embeddings is not None:
+                    dimension = embeddings.shape[1]
+                    self._ensure_faiss_index(dimension)
+                    # Reset index and id_map
+                    self.faiss_index.reset()
+                    self.id_map = []
+                    self.faiss_index.add(embeddings.astype('float32'))
+                    self.id_map = row_ids
+            else:
+                # No remaining chunks: reset index
+                self.faiss_index = None
+                self.id_map = []
+        self.conn.commit()
+        cursor.close()
+        return len(ids_to_delete)
+
+    def get_chunks_by_filename(self, filename: str) -> List[Dict[str, Any]]:
+        """Get all chunks for a given filename."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT id, filename, page_number, section_title, chunk_id, text
+            FROM chunks
+            WHERE filename = ?
+        """, (filename,))
+        rows = cursor.fetchall()
+        cursor.close()
+        return [
+            {
+                'id': row['id'],
+                'filename': row['filename'],
+                'page_number': row['page_number'],
+                'section_title': row['section_title'],
+                'chunk_id': row['chunk_id'],
+                'text': row['text']
+            }
+            for row in rows
+        ]
+
     def build_indexes_from_db(self):
         """Build or rebuild both indexes from the chunks table."""
         cursor = self.conn.cursor()

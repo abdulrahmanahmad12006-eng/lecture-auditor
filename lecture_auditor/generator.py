@@ -50,8 +50,6 @@ class AnswerGenerator:
         self.max_tokens = max_tokens
         self.top_k = top_k
         self.session = requests.Session()
-        # Set default timeout for requests
-        self.session.request = lambda *args, **kw: self.session.request(*args, **{**kw, 'timeout': config.LLM_TIMEOUT})
 
     def _format_context(self, search_results: List[Dict[str, Any]]) -> str:
         """Format search results into a context string with source numbers."""
@@ -104,7 +102,7 @@ Example:
             "max_tokens": self.max_tokens
         }
         try:
-            response = self.session.post(url, json=payload)
+            response = self.session.post(url, json=payload, timeout=config.LLM_TIMEOUT)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to connect to LLM endpoint at {self.endpoint_url}: {e}")
