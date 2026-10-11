@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: lecture-auditor
+Version: 0.1.0
+Summary: A lecture auditor system with FastAPI, PDF ingestion, and retrieval
+Project-URL: Homepage, https://github.com/yourusername/lecture-auditor
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: pydantic
+Requires-Dist: pypdf
+Requires-Dist: faiss-cpu
+Requires-Dist: sentence-transformers
+Requires-Dist: pytest
+Requires-Dist: ruff
+Requires-Dist: requests

@@ -1,0 +1,42 @@
+[
+  {
+    "question": "What is the derivative of x^2 with respect to x?",
+    "expected_keywords": ["derivative", "x^2", "2x", "power rule"]
+  },
+  {
+    "question": "Explain the process of photosynthesis in plants.",
+    "expected_keywords": ["photosynthesis", "chlorophyll", "light energy", "carbon dioxide", "oxygen"]
+  },
+  {
+    "question": "What is the formula for the area of a circle?",
+    "expected_keywords": ["area", "circle", "π", "radius", "squared"]
+  },
+  {
+    "question": "How does a transistor amplify an electrical signal?",
+    "expected_keywords": ["transistor", "amplify", "semiconductor", "base", "collector", "emitter"]
+  },
+  {
+    "question": "What are the four fundamental forces in physics?",
+    "expected_keywords": ["fundamental forces", "gravity", "electromagnetism", "strong nuclear", "weak nuclear"]
+  },
+  {
+    "question": "Describe the structure of a DNA molecule.",
+    "expected_keywords": ["DNA", "double helix", "nucleotides", "base pairs", "sugar-phosphate backbone"]
+  },
+  {
+    "question": "What is the difference between RAM and ROM in a computer?",
+    "expected_keywords": ["RAM", "ROM", "memory", "volatile", "non-volatile", "random access"]
+  },
+  {
+    "question": "How does the respiratory system exchange gases?",
+    "expected_keywords": ["respiratory system", "gas exchange", "oxygen", "carbon dioxide", "alveoli"]
+  },
+  {
+    "question": "What is the capital of France?",
+    "expected_keywords": ["capital", "France", "Paris"]
+  },
+  {
+    "question": "Explain the concept of supply and demand in economics.",
+    "expected_keywords": ["supply", "demand", "equilibrium", "price", "quantity"]
+  }
+]

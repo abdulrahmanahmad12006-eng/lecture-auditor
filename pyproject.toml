@@ -1,0 +1,25 @@
+[project]
+name = "lecture-auditor"
+version = "0.1.0"
+description = "A lecture auditor system with FastAPI, PDF ingestion, and retrieval"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pypdf",
+    "faiss-cpu",
+    "sentence-transformers",
+    "pytest",
+    "ruff",
+    "requests"
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/lecture-auditor"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["lecture_auditor"]

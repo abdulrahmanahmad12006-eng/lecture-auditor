@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lecture Auditor</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Lecture Auditor</h1>
+            <div class="status-indicators">
+                <span class="status dot" id="api-status"></span>
+                <span class="status-text" id="api-status-text">API: Checking...</span>
+                <span class="status dot" id="db-status"></span>
+                <span class="status-text" id="db-status-text">DB: Checking...</span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <section class="upload-section">
+                    <h2>Document Upload</h2>
+                    <input type="file" id="pdf-upload" accept=".pdf" multiple>
+                    <button id="upload-btn">Upload and Index</button>
+                    <div id="upload-progress" class="progress"></div>
+                </section>
+
+                <section class="indexing-status">
+                    <h2>Indexing Status</h2>
+                    <div id="indexing-info">
+                        <p>Documents indexed: <span id="doc-count">0</span></p>
+                        <p>Last updated: <span id="last-updated">Never</span></p>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="main-panel">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="chat">Chat/Search</button>
+                    <button class="tab-btn" data-tab="evals">Evals Dashboard</button>
+                </div>
+
+                <div class="tab-content" id="chat-tab">
+                    <div class="chat-messages" id="chat-messages">
+                        <!-- Messages will be appended here -->
+                    </div>
+                    <div class="chat-input">
+                        <input type="text" id="chat-input" placeholder="Ask a question about the lectures...">
+                        <button id="chat-send">Send</button>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="evals-tab" style="display: none;">
+                    <h2>Evaluation Metrics Dashboard</h2>
+                    <div id="evals-content">
+                        <!-- Evals metrics will be loaded here -->
+                        <p>Loading evaluation metrics...</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
