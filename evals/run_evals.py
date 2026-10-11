@@ -3,6 +3,7 @@ import time
 import sqlite3
 import os
 import sys
+import argparse
 from typing import List, Dict, Any, Set
 
 # Add lecture_auditor to path
@@ -121,7 +122,12 @@ Faithfulness score (0-100):"""
         print(f"Error calling LLM for faithfulness: {e}")
         return 0.0
 
-def main():
+def run_evaluation(mode: str = 'hybrid') -> Dict[str, Any]:
+    """
+    Run evaluation for the specified mode.
+    mode: 'lexical', 'dense', or 'hybrid'
+    Returns a dictionary with metrics.
+    """
     # Load dataset
     dataset_path = os.path.join(os.path.dirname(__file__), "dataset.json")
     if not os.path.exists(dataset_path):
@@ -136,7 +142,7 @@ def main():
         sys.exit(1)
 
     # Initialize retriever once
-    print("Initializing retriever...")
+    print(f"Initializing retriever for mode '{mode}'...")
     retriever = HybridRetriever(DB_PATH)
 
     # Lists to store per-question metrics
@@ -157,13 +163,17 @@ def main():
         print(f"\nQuestion {i+1}/{len(dataset)}: {question}")
         print(f"Expected keywords: {expected_keywords}")
 
-        # --- Hybrid Search ---
+        # --- Search ---
         start_search = time.time()
         try:
-            # We'll use the retriever's hybrid_search method directly
-            search_results = retriever.hybrid_search(question, limit=TOP_K)
+            if mode == 'lexical':
+                search_results = retriever.lexical_search(question, limit=TOP_K)
+            elif mode == 'dense':
+                search_results = retriever.dense_search(question, limit=TOP_K)
+            else:  # hybrid
+                search_results = retriever.hybrid_search(question, limit=TOP_K)
         except Exception as e:
-            print(f"Error during hybrid search: {e}")
+            print(f"Error during search: {e}")
             search_results = []
         end_search = time.time()
         latency_search = (end_search - start_search) * 1000  # ms
@@ -172,7 +182,6 @@ def main():
         # Extract retrieved chunk IDs
         retrieved_ids = set()
         for result in search_results:
-            # The search result should have an 'id' field (the database row id)
             if 'id' in result:
                 retrieved_ids.add(result['id'])
 
@@ -194,11 +203,7 @@ def main():
         # --- Generate Answer ---
         start_gen = time.time()
         try:
-            # We'll use the generator's convenience function, but we need to import it.
-            # To avoid re-initializing the retriever inside the generator, we can use our own retriever instance?
-            # The generator's generate_answer function creates its own HybridRetriever instance.
-            # For simplicity, we'll call the generator's function (it will create a new retriever each time).
-            # This is okay for evaluation but not optimal.
+            # We'll use the generator's convenience function
             from lecture_auditor.generator import generate_answer
             answer_obj = generate_answer(question, endpoint_url=ENDPOINT_URL, model_name=MODEL_NAME)
             answer = answer_obj.answer
@@ -236,6 +241,7 @@ def main():
 
     # Prepare results dictionary
     results = {
+        "mode": mode,
         "dataset_size": len(dataset),
         "top_k": TOP_K,
         "average_context_recall": avg_recall,
@@ -257,19 +263,54 @@ def main():
         ]
     }
 
-    # Save results
-    output_path = os.path.join(os.path.dirname(__file__), "results.json")
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(results, f, indent=2)
+    return results
 
-    print("\n=== Evaluation Summary ===")
-    print(f"Dataset size: {len(dataset)}")
-    print(f"Average Context Recall: {avg_recall:.2%}")
-    print(f"Average Faithfulness: {avg_faithfulness:.2%}")
-    print(f"Average Search Latency: {avg_latency_search:.2f} ms")
-    print(f"Average Generation Latency: {avg_latency_gen:.2f} ms")
-    print(f"Average Total Latency: {avg_latency_total:.2f} ms")
-    print(f"Results saved to: {output_path}")
+def main():
+    parser = argparse.ArgumentParser(description='Run evaluation for Lecture Auditor.')
+    parser.add_argument('--mode', choices=['lexical', 'dense', 'hybrid'], default='hybrid',
+                        help='Evaluation mode: lexical-only, dense-only, or hybrid (RRF)')
+    parser.add_argument('--all', action='store_true',
+                        help='Run all three modes and save combined results')
+    args = parser.parse_args()
+
+    if args.all:
+        modes = ['lexical', 'dense', 'hybrid']
+        all_results = {}
+        for mode in modes:
+            print(f"\n=== Running evaluation in {mode.upper()} mode ===")
+            results = run_evaluation(mode)
+            all_results[mode] = results
+            # Save intermediate results for each mode? We'll save combined at the end.
+        # Save combined results
+        output_path = os.path.join(os.path.dirname(__file__), "results.json")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(all_results, f, indent=2)
+        print("\n=== Evaluation Summary (All Modes) ===")
+        for mode in modes:
+            res = all_results[mode]
+            print(f"{mode.upper()}:")
+            print(f"  Dataset size: {res['dataset_size']}")
+            print(f"  Average Context Recall: {res['average_context_recall']:.2%}")
+            print(f"  Average Faithfulness: {res['average_faithfulness']:.2%}")
+            print(f"  Average Search Latency: {res['average_latency_search_ms']:.2f} ms")
+            print(f"  Average Generation Latency: {res['average_latency_generation_ms']:.2f} ms")
+            print(f"  Average Total Latency: {res['average_latency_total_ms']:.2f} ms")
+        print(f"Results saved to: {output_path}")
+    else:
+        # Run single mode
+        results = run_evaluation(args.mode)
+        output_path = os.path.join(os.path.dirname(__file__), "results.json")
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2)
+        print("\n=== Evaluation Summary ===")
+        print(f"Mode: {args.mode.upper()}")
+        print(f"Dataset size: {results['dataset_size']}")
+        print(f"Average Context Recall: {results['average_context_recall']:.2%}")
+        print(f"Average Faithfulness: {results['average_faithfulness']:.2%}")
+        print(f"Average Search Latency: {results['average_latency_search_ms']:.2f} ms")
+        print(f"Average Generation Latency: {results['average_latency_generation_ms']:.2f} ms")
+        print(f"Average Total Latency: {results['average_latency_total_ms']:.2f} ms")
+        print(f"Results saved to: {output_path}")
 
 if __name__ == "__main__":
     main()

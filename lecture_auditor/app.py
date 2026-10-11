@@ -334,44 +334,26 @@ async def get_documents():
 @app.get("/api/evals")
 async def get_evals():
     """
-    Return or run benchmark results from the evals module.
-    For now, we return a placeholder or run any evaluation scripts found in /evals.
+    Return evaluation results if available, otherwise provide guidance.
     """
     evals_dir = os.path.join(os.path.dirname(__file__), "..", "evals")
-    if not os.path.exists(evals_dir):
-        return JSONResponse(content={
-            "message": "Evals directory not found. No evaluation results available."
-        })
-
-    # Look for any Python scripts or JSON results
-    results = {}
-    try:
-        # If there's a results.json, read it
-        results_file = os.path.join(evals_dir, "results.json")
-        if os.path.exists(results_file):
-            import json
+    results_file = os.path.join(evals_dir, "results.json")
+    if os.path.exists(results_file):
+        try:
             with open(results_file, 'r') as f:
-                results = json.load(f)
-            return JSONResponse(content={"evals_results": results})
-
-        # If there's a run_evals.py, we could run it, but for safety we'll just list what's available
-        scripts = [f for f in os.listdir(evals_dir) if f.endswith('.py')]
-        if scripts:
+                data = json.load(f)
+            return JSONResponse(content=data)
+        except Exception as e:
             return JSONResponse(content={
-                "message": f"Evaluation scripts found: {scripts}. Please run them manually.",
-                "available_scripts": scripts
-            })
-
-        # Otherwise, just list the contents
-        contents = os.listdir(evals_dir)
+                "error": f"Failed to read evaluation results: {str(e)}"
+            }, status_code=500)
+    else:
+        # No results yet
         return JSONResponse(content={
-            "message": "Evals directory contents:",
-            "contents": contents
+            "message": "No evaluation results available. Run the evaluation script first:",
+            "instructions": "python evals/run_evals.py [--mode lexical|dense|hybrid] [--all]",
+            "example": "python evals/run_evals.py --all"
         })
-    except Exception as e:
-        return JSONResponse(content={
-            "error": f"Error accessing evals: {str(e)}"
-        }, status_code=500)
 
 def _get_total_chunks():
     """Helper to get total number of chunks in the database."""
