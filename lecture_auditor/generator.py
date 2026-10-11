@@ -10,6 +10,9 @@ except ImportError:
     # Fallback if running from within the lecture_auditor directory
     from lecture_auditor.retriever import hybrid_search
 
+# Import configuration
+from lecture_auditor.config import config
+
 # Pydantic model for validating the LLM output
 class GeneratedAnswer(BaseModel):
     answer: str = Field(..., description="The generated answer string with inline citations")
@@ -26,8 +29,8 @@ class GeneratedAnswer(BaseModel):
 
 class AnswerGenerator:
     def __init__(self,
-                 endpoint_url: str = "http://127.0.0.1:8082/v1",
-                 model_name: str = "local-model",
+                 endpoint_url: Optional[str] = None,
+                 model_name: Optional[str] = None,
                  temperature: float = 0.0,
                  max_tokens: int = 500,
                  top_k: int = 5):
@@ -35,18 +38,20 @@ class AnswerGenerator:
         Initialize the answer generator.
 
         Args:
-            endpoint_url: Base URL of the OpenAI-compatible API
-            model_name: Model name to use for generation
+            endpoint_url: Base URL of the OpenAI-compatible API (defaults to config)
+            model_name: Model name to use for generation (defaults to config)
             temperature: Sampling temperature
             max_tokens: Maximum tokens to generate
             top_k: Number of retrieval results to use as context
         """
-        self.endpoint_url = endpoint_url.rstrip('/')
-        self.model_name = model_name
+        self.endpoint_url = (endpoint_url or config.LLM_BASE_URL).rstrip('/')
+        self.model_name = (model_name or config.LLM_MODEL)
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.top_k = top_k
         self.session = requests.Session()
+        # Set default timeout for requests
+        self.session.request = lambda *args, **kw: self.session.request(*args, **{**kw, 'timeout': config.LLM_TIMEOUT})
 
     def _format_context(self, search_results: List[Dict[str, Any]]) -> str:
         """Format search results into a context string with source numbers."""
@@ -98,8 +103,11 @@ Example:
             "temperature": self.temperature,
             "max_tokens": self.max_tokens
         }
-        response = self.session.post(url, json=payload, timeout=30)
-        response.raise_for_status()
+        try:
+            response = self.session.post(url, json=payload)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise ConnectionError(f"Failed to connect to LLM endpoint at {self.endpoint_url}: {e}")
         result = response.json()
         # Extract the generated text
         if "choices" in result and len(result["choices"]) > 0:
@@ -148,15 +156,15 @@ Example:
 
 # Convenience function for quick generation
 def generate_answer(question: str,
-                   endpoint_url: str = "http://127.0.0.1:8082/v1",
-                   model_name: str = "local-model") -> GeneratedAnswer:
+                   endpoint_url: Optional[str] = None,
+                   model_name: Optional[str] = None) -> GeneratedAnswer:
     """
     Generate a grounded answer to a question using default settings.
 
     Args:
         question: The question to answer
-        endpoint_url: Base URL of the OpenAI-compatible API
-        model_name: Model name to use
+        endpoint_url: Base URL of the OpenAI-compatible API (defaults to config)
+        model_name: Model name to use (defaults to config)
 
     Returns:
         GeneratedAnswer: Pydantic validated answer

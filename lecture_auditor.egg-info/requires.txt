@@ -7,3 +7,4 @@ sentence-transformers
 pytest
 ruff
 requests
+python-dotenv

@@ -9,13 +9,14 @@ from typing import List, Dict, Any, Set
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lecture_auditor'))
 
 from lecture_auditor.retriever import HybridRetriever
+from lecture_auditor.config import config
 import requests
 
-# Configuration
-DB_PATH = "data/app.db"
-ENDPOINT_URL = "http://127.0.0.1:8082/v1"
-MODEL_NAME = "local-model"  # This should match what the server expects
-TOP_K = 5  # Number of chunks to retrieve for each question
+# Configuration from config module
+DB_PATH = config.DB_PATH
+ENDPOINT_URL = config.LLM_BASE_URL
+MODEL_NAME = config.LLM_MODEL
+TOP_K = config.TOP_K
 
 def get_relevant_chunk_ids(keywords: List[str]) -> Set[int]:
     """
@@ -97,7 +98,7 @@ Faithfulness score (0-100):"""
     }
 
     try:
-        response = requests.post(url, json=payload, timeout=30)
+        response = requests.post(url, json=payload, timeout=config.LLM_TIMEOUT)
         response.raise_for_status()
         result = response.json()
         if "choices" in result and len(result["choices"]) > 0:
@@ -116,7 +117,7 @@ Faithfulness score (0-100):"""
         else:
             print("Unexpected response format from LLM endpoint")
             return 0.0
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         print(f"Error calling LLM for faithfulness: {e}")
         return 0.0
 

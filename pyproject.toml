@@ -11,7 +11,8 @@ dependencies = [
     "sentence-transformers",
     "pytest",
     "ruff",
-    "requests"
+    "requests",
+    "python-dotenv"
 ]
 
 [project.urls]

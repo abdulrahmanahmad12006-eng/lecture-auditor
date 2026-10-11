@@ -1,6 +1,7 @@
 pyproject.toml
 lecture_auditor/__init__.py
 lecture_auditor/app.py
+lecture_auditor/config.py
 lecture_auditor/generator.py
 lecture_auditor/ingestion.py
 lecture_auditor/retriever.py

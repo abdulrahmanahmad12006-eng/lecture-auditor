@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from lecture_auditor.ingestion import ingest_pdf, init_db as init_ingestion_db
 from lecture_auditor.retriever import HybridRetriever
 from lecture_auditor.generator import generate_answer
+from lecture_auditor.config import config
 
 app = FastAPI(title="Lecture Auditor API")
 
@@ -208,3 +209,7 @@ def _get_total_chunks():
         return count
     except Exception:
         return 0
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("lecture_auditor.app:app", host=config.HOST, port=config.PORT, reload=True)

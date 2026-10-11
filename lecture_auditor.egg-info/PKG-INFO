@@ -12,3 +12,4 @@ Requires-Dist: sentence-transformers
 Requires-Dist: pytest
 Requires-Dist: ruff
 Requires-Dist: requests
+Requires-Dist: python-dotenv
