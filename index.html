@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lecture Auditor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f0f;
+            color: #ffffff;
+            display: flex;
+            height: 100vh;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .container {
+            max-width: 500px;
+            padding: 2rem;
+        }
+        .btn {
+            display: inline-block;
+            margin-top: 1.5rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #00bfff;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #009acd;
+        }
+        .spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #00bfff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>Lecture Auditor</h1>
+        <p id="message">Checking server status...</p>
+    </div>
+
+    <script>
+        // Try to detect if the server is running
+        fetch('/api/health', { method: 'GET', mode: 'no-cors' })
+            .then(response => {
+                // If we get a response (even if it's an error), the server is likely running
+                // Redirect to the app
+                window.location.href = 'http://127.0.0.1:8000';
+            })
+            .catch(error => {
+                // If fetch fails, show instructions
+                document.getElementById('message').innerHTML = `
+                    <p>The Lecture Auditor server is not running.</p>
+                    <p>To start the server:</p>
+                    <ul style="text-align: left; display: inline-block;">
+                        <li>Double-click <code>start.bat</code> (Windows)</li>
+                        <li>Or run <code>./start.sh</code> (Mac/Linux) in a terminal</li>
+                        <li>Or run <code>python lecture_auditor/app.py</code> if you have Python and dependencies installed</li>
+                    </ul>
+                    <p>Once the server is running, this page will automatically redirect to the application.</p>
+                    <a href="#" onclick="location.reload();" class="btn">Retry</a>
+                `;
+            });
+    </script>
+</body>
+</html>

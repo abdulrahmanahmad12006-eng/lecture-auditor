@@ -386,4 +386,13 @@ def _get_total_chunks():
 
 if __name__ == "__main__":
     import uvicorn
+    import webbrowser
+    import threading
+    import time
+    # Open browser after a short delay, unless NO_BROWSER is set
+    if os.environ.get("NO_BROWSER") != "1":
+        def open_browser():
+            time.sleep(1.5)  # Wait for server to start
+            webbrowser.open("http://127.0.0.1:8000")
+        threading.Thread(target=open_browser, daemon=True).start()
     uvicorn.run("lecture_auditor.app:app", host=config.HOST, port=config.PORT, reload=True)

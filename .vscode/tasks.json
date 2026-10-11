@@ -1,0 +1,14 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Lecture Auditor",
+            "type": "process",
+            "command": "${workspaceFolder}/start.sh",
+            "windows": {
+                "command": "${workspaceFolder}/start.bat"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

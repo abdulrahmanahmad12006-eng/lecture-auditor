@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Lecture Auditor",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/lecture_auditor/app.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}
