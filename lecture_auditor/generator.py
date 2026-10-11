@@ -152,6 +152,7 @@ Example:
         """Close the requests session."""
         self.session.close()
 
+
 # Convenience function for quick generation
 def generate_answer(question: str,
                    endpoint_url: Optional[str] = None,

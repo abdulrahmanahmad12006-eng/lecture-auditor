@@ -1,7 +1,9 @@
-import sqlite3
 import os
+import sqlite3
 from typing import List, Tuple
+
 from pypdf import PdfReader
+
 
 def init_db(db_path: str = "data/app.db") -> None:
     """Initialize the SQLite database and create the chunks table if it doesn't exist."""
@@ -21,6 +23,7 @@ def init_db(db_path: str = "data/app.db") -> None:
     conn.commit()
     conn.close()
 
+
 def is_heading(line: str) -> bool:
     """Simple heuristic to detect headings."""
     line = line.strip()
@@ -30,9 +33,8 @@ def is_heading(line: str) -> bool:
     if line.isupper() and len(line) < 50:
         return True
     # Ends with colon and short
-    if line.endswith(':') and len(line) < 60:
-        return True
-    return False
+    return bool(line.endswith(':') and len(line) < 60)
+
 
 def extract_chunks_from_pdf(pdf_path: str) -> List[Tuple[str, int, str, str, str]]:
     """
@@ -80,6 +82,7 @@ def extract_chunks_from_pdf(pdf_path: str) -> List[Tuple[str, int, str, str, str
 
     return chunks
 
+
 def ingest_pdf(pdf_path: str, db_path: str = "data/app.db") -> None:
     """Ingest a single PDF file into the SQLite database."""
     init_db(db_path)
@@ -98,6 +101,7 @@ def ingest_pdf(pdf_path: str, db_path: str = "data/app.db") -> None:
     conn.commit()
     conn.close()
     print(f"Ingested {len(chunks)} chunks from {pdf_path} into {db_path}")
+
 
 if __name__ == "__main__":
     # Example usage: ingest all PDFs in data directory

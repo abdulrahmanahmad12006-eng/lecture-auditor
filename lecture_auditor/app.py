@@ -1,6 +1,7 @@
 import os
 import shutil
-from typing import List
+from typing import Any, List
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -212,7 +213,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
     })
 
 @app.post("/api/query")
-async def query_question(payload: dict):
+async def query_question(payload: dict[str, Any]):
     """
     Accept a question and return a grounded answer with citations and source metadata.
     Expected payload: {"question": "string"}

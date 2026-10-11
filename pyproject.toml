@@ -3,6 +3,7 @@ name = "lecture-auditor"
 version = "0.1.0"
 description = "A lecture auditor system with FastAPI, PDF ingestion, and retrieval"
 dependencies = [
+    "python-multipart",
     "fastapi",
     "uvicorn",
     "pydantic",

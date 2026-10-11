@@ -1,7 +1,6 @@
-import sqlite3
 import os
+import sqlite3
 from typing import List, Tuple, Dict, Any
-import numpy as np
 
 # Try to import optional dependencies, but allow missing for testing
 try:
@@ -10,6 +9,7 @@ try:
     DEPS_AVAILABLE = True
 except ImportError:
     DEPS_AVAILABLE = False
+
 
 class HybridRetriever:
     def __init__(self, db_path: str = "data/app.db", model_name: str = "all-MiniLM-L6-v2"):
@@ -351,6 +351,7 @@ class HybridRetriever:
             self.conn.close()
             self.conn = None
 
+
 # Convenience function for quick search
 def search(query: str, db_path: str = "data/app.db", limit: int = 10) -> List[Dict[str, Any]]:
     """Perform a hybrid search on the given query."""
@@ -359,6 +360,7 @@ def search(query: str, db_path: str = "data/app.db", limit: int = 10) -> List[Di
         return retriever.hybrid_search(query, limit)
     finally:
         retriever.close()
+
 
 # Alias for compatibility with generator
 def hybrid_search(query: str, db_path: str = "data/app.db", limit: int = 10) -> List[Dict[str, Any]]:
