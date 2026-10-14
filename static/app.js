@@ -1,5 +1,4 @@
 // Lecture Auditor Frontend - Real backend integration
-
 document.addEventListener('DOMContentLoaded', () => {
     // Elements
     const uploadInput = document.getElementById('pdf-upload');
@@ -8,22 +7,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatInput = document.getElementById('chat-input');
     const chatSend = document.getElementById('chat-send');
     const chatMessages = document.getElementById('chat-messages');
-    const clearChatBtn = document.getElementById('clear-chat-btn'); // We'll add this later
     const apiStatusDot = document.getElementById('api-status');
     const apiStatusText = document.getElementById('api-status-text');
     const dbStatusDot = document.getElementById('db-status');
     const dbStatusText = document.getElementById('db-status-text');
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
-    const docsList = document.getElementById('docs-list'); // We'll add this in HTML? We need to modify HTML to have a docs list in the sidebar.
-    // Since we cannot modify HTML (the user didn't ask to change HTML), we need to work with existing HTML.
-    // Looking at the existing HTML, we have a sidebar with an upload section and an indexing status section.
-    // We can add a document list inside the indexing status section or after it.
-    // However, we are not allowed to change HTML? The task says to replace ALL mock behavior in static/app.js with real fetch calls.
-    // It does not forbid changing HTML, but the task only mentions static/app.js. We'll assume we can also adjust HTML if needed, but to be safe we'll try to work with existing elements.
-    // The indexing status section has a div with id "indexing-info". We can replace its content with a document list.
-    // Let's do that: we'll replace the content of #indexing-info with a document list.
     const indexingInfo = document.getElementById('indexing-info');
+    const docCountSpan = document.getElementById('doc-count');
+    const evalsContent = document.getElementById('evals-content');
+    const lastUpdatedSpan = document.getElementById('last-updated');
 
     // Chat history from localStorage
     const CHAT_HISTORY_KEY = 'lecture-auditor-chat-history';
@@ -37,14 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
     init();
 
     function init() {
-        // Load chat history
         renderChatHistory();
-        // Start health polling
         startHealthPolling();
-        // Load document list
         refreshDocumentList();
-        // Set up event listeners
         setupEventListeners();
+        // Ensure chat tab is active on load
+        setActiveTab('chat');
     }
 
     function setupEventListeners() {
@@ -62,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Clear chat button (we'll add it to the chat input area)
+        // Clear chat button
         const clearBtn = document.createElement('button');
         clearBtn.id = 'clear-chat-btn';
         clearBtn.textContent = 'Clear Chat';
@@ -74,10 +65,10 @@ document.addEventListener('DOMContentLoaded', () => {
         tabButtons.forEach(button => {
             button.addEventListener('click', () => {
                 tabButtons.forEach(btn => btn.classList.remove('active'));
-                tabContents.forEach(content => content.style.display = 'none');
+                tabContents.forEach(content => content.classList.remove('active'));
                 button.classList.add('active');
                 const tabId = button.getAttribute('data-tab');
-                document.getElementById(`${tabId}-tab`).style.display = 'block';
+                document.getElementById(`${tabId}-tab`).classList.add('active');
                 // If switching to evals tab, refresh evals
                 if (tabId === 'evals') {
                     refreshEvals();
@@ -87,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleFileSelect(e) {
-        const files = e.target.files;
+       const files = Array.from(e.target.files);
         if (files.length === 0) return;
 
         // Reset input
@@ -108,10 +99,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create FormData
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('files', file);
 
         // Show progress
-        uploadProgress.innerHTML = `<div></div><p>Uploading ${file.name}...</p>`;
+        uploadProgress.innerHTML = `<div></div><p>Uploading ${escapeHtml(file.name)}...</p>`;
         const progressBar = uploadProgress.querySelector('div');
         let width = 0;
         const interval = setInterval(() => {
@@ -148,13 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => {
             clearInterval(interval);
-            uploadProgress.innerHTML = `<p>Upload failed: ${error.message}</p>`;
+            uploadProgress.innerHTML = `<p>Upload failed: ${escapeHtml(error.message)}</p>`;
             console.error('Upload error:', error);
         });
     }
 
     function showUploadError(filename, message) {
-        uploadProgress.innerHTML = `<p>Upload failed for ${filename}: ${message}</p>`;
+        uploadProgress.innerHTML = `<p>Upload failed for ${escapeHtml(filename)}: ${escapeHtml(message)}</p>`;
         setTimeout(() => {
             uploadProgress.innerHTML = '';
         }, 3000);
@@ -198,10 +189,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data.error) {
                 // Handle error from backend
-                addChatMessage(`Error: ${data.error}`, false);
+                addChatMessage(`Error: ${escapeHtml(data.error)}`, false);
             } else {
                 // Add bot message with sources
-                addChatMessage(data.answer, false, data.sources);
+                addChatMessage(data.answer, false, data.sources || []);
             }
 
             // Save to history
@@ -214,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chatInput.placeholder = 'Ask a question about the lectures...';
             chatInput.focus();
 
-            addChatMessage(`Error: ${error.message}`, false);
+            addChatMessage(`Error: ${escapeHtml(error.message)}`, false);
             saveChatHistory();
         });
     }
@@ -226,10 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (sources && sources.length > 0) {
             // Render answer with sources
-            // We'll create a div for the answer text and then a list of sources
             const answerDiv = document.createElement('div');
             answerDiv.classList.add('answer-text');
-            // Escape HTML to avoid XSS
             answerDiv.textContent = content;
             messageDiv.appendChild(answerDiv);
 
@@ -239,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const sourcesList = document.createElement('ul');
             sources.forEach(source => {
                 const li = document.createElement('li');
-                li.innerHTML = `<strong>${source.filename}</strong> (p. ${source.page_number})${source.section_title ? `, ${source.section_title}` : ''}`;
+                li.innerHTML = `<strong>${escapeHtml(source.filename)}</strong> (p. ${source.page_number})${source.section_title ? `, ${escapeHtml(source.section_title)}` : ''}`;
                 sourcesList.appendChild(li);
             });
             sourcesDiv.appendChild(sourcesList);
@@ -302,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(data => {
                 // Update API status
-                if data.llm_endpoint && data.llm_endpoint.reachable) {
+                if (data.llm_endpoint && data.llm_endpoint.reachable) {
                     apiStatusDot.className = 'status dot online';
                     apiStatusText.textContent = 'API: Online';
                 } else {
@@ -310,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     apiStatusText.textContent = 'API: Offline';
                 }
                 // Update DB status
-                if data.database && data.database.reachable) {
+                if (data.database && data.database.reachable) {
                     dbStatusDot.className = 'status dot online';
                     dbStatusText.textContent = `DB: Online (${data.database.chunk_count} chunks)`;
                 } else {
@@ -340,11 +329,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update the indexing info section with document list
                 if (indexingInfo) {
                     if (data.files && data.files.length > 0) {
+                        const totalChunks = data.total_chunks || 0;
+                        docCountSpan.textContent = totalChunks;
                         const listHTML = `
-                            <h3>Indexed Documents (${data.total_chunks} total chunks)</h3>
+                            <h3>Indexed Documents (${totalChunks} total chunks)</h3>
                             <ul>
-                                ${data.files.map(doc => `<li>${doc.filename} <span>(${doc.chunk_count} chunks)</span></li>`).join('')}
-                            </li>
+                                ${data.files.map(doc => `<li>${escapeHtml(doc.filename)} <span>(${doc.chunk_count} chunks)</span></li>`).join('')}
+                            </ul>
                             <button id="refresh-docs-btn">Refresh List</button>
                         `;
                         indexingInfo.innerHTML = listHTML;
@@ -353,8 +344,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (refreshBtn) {
                             refreshBtn.addEventListener('click', refreshDocumentList);
                         }
+                        // Update last updated timestamp
+                        if (lastUpdatedSpan) {
+                            lastUpdatedSpan.textContent = new Date().toLocaleString();
+                        }
                     } else {
                         indexingInfo.innerHTML = '<p>No documents indexed yet. Upload some PDFs to get started.</p>';
+                        docCountSpan.textContent = '0';
+                        if (lastUpdatedSpan) {
+                            lastUpdatedSpan.textContent = 'Never';
+                        }
                     }
                 }
             })
@@ -362,6 +361,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('Error refreshing document list:', error);
                 if (indexingInfo) {
                     indexingInfo.innerHTML = '<p>Error loading document list.</p>';
+                    docCountSpan.textContent = 'Error';
+                    if (lastUpdatedSpan) {
+                        lastUpdatedSpan.textContent = 'Error';
+                    }
                 }
             });
     }
@@ -375,11 +378,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return response.json();
             })
             .then(data => {
-                // Find the evals content area
-                const evalsContent = document.getElementById('evals-content');
                 if (evalsContent) {
-                    if data.evals_results) {
-                        // Display the results in a table
+                    if (data.evals_results) {
                         const results = data.evals_results;
                         let html = '<h3>Evaluation Results</h3>';
                         html += '<table><tr><th>Metric</th><th>Value</th></tr>';
@@ -392,9 +392,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         html += `<tr><td>Avg Total Latency</td><td>${results.average_latency_total_ms.toFixed(2)} ms</td></tr>`;
                         evalsContent.innerHTML = html;
                     } else if (data.message) {
-                        evalsContent.innerHTML = `<p>${data.message}</p>`;
+                        evalsContent.innerHTML = `<p>${escapeHtml(data.message)}</p>`;
                     } else if (data.contents) {
-                        evalsContent.innerHTML = `<p>Contents of evals directory:</p><ul>${data.contents.map(f => `<li>${f}</li>`).join('')}</ul>`;
+                        evalsContent.innerHTML = `<p>Contents of evals directory:</p><ul>${data.contents.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>`;
                     } else {
                         evalsContent.innerHTML = '<p>No evaluation data available.</p>';
                     }
@@ -402,14 +402,39 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(error => {
                 console.error('Error refreshing evals:', error);
-                const evalsContent = document.getElementById('evals-content');
                 if (evalsContent) {
                     evalsContent.innerHTML = '<p>Error loading evaluation data.</p>';
                 }
             });
     }
 
-    // Initialize the evals tab content on first load (if it's the active tab)
-    // We'll do a refresh when the tab is shown, but also we can do an initial load.
-    // We'll leave it to the tab switch handler.
+    // Helper function to set active tab
+    function setActiveTab(tabId) {
+        tabButtons.forEach(btn => {
+            if (btn.getAttribute('data-tab') === tabId) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        tabContents.forEach(content => {
+            if (content.id === `${tabId}-tab`) {
+                content.classList.add('active');
+            } else {
+                content.classList.remove('active');
+            }
+        });
+    }
+
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, m => map[m]);
+    }
 });

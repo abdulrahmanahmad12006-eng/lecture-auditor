@@ -234,7 +234,7 @@ async def query_question(payload: dict[str, Any]):
 
     try:
         # Get search results
-        search_results = hybrid_search(question, limit=5)
+        search_results = retriever_instance.hybrid_search(question, limit=5)
         if not search_results:
             return JSONResponse(content={
                 "answer": "I cannot answer based on the provided sources.",
